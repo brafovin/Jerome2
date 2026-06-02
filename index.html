@@ -129,11 +129,14 @@ canvas { display: block; }
     <div id="ammo1">Munition: ∞</div>
   </div>
 
+  <div id="secret-hint" style="display:none; position:absolute; top:40%; left:50%; transform:translate(-50%,-50%);
+    background:rgba(0,0,0,0.75); color:#FFD700; font-size:20px; padding:16px 28px;
+    border-radius:10px; border:1px solid #FFD700; text-align:center; transition:opacity 2s;">
+    🔓 Geheimer Raum geöffnet — lauf zu Koordinate (55, 55)!
+  </div>
+
   <div id="winner-screen">
-    <h1 id="winner-text">Du gewinnst!</h1>
-    <p id="secret-hint" style="display:none; color:#FFD700; font-size:18px; margin-bottom:12px;">
-      🔓 Der geheime Raum bei (55, 55) wurde geöffnet — geh hin und schau rein!
-    </p>
+    <h1 id="winner-text">💀 Bot gewinnt!</h1>
     <button onclick="restartGame()">🔄 Nochmal spielen</button>
   </div>
 </div>
@@ -148,26 +151,45 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB);
-scene.fog = new THREE.FogExp2(0xADD8E6, 0.006);
+scene.background = new THREE.Color(0x05060f);
+scene.fog = new THREE.FogExp2(0x05060f, 0.012);
 
-// ── LIGHTING ──────────────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const sun = new THREE.DirectionalLight(0xfffde7, 1.1);
-sun.position.set(40, 90, 30);
-sun.castShadow = true;
-sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
-sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
-sun.shadow.camera.top  =  120; sun.shadow.camera.bottom = -120;
-sun.shadow.camera.far  = 300;
-scene.add(sun);
+// ── LIGHTING (night) ──────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x1a2040, 0.6));
+
+// dim moonlight
+const moon = new THREE.DirectionalLight(0x4466bb, 0.35);
+moon.position.set(-30, 80, -20);
+moon.castShadow = true;
+moon.shadow.mapSize.width = 2048; moon.shadow.mapSize.height = 2048;
+moon.shadow.camera.left = -120; moon.shadow.camera.right = 120;
+moon.shadow.camera.top  =  120; moon.shadow.camera.bottom = -120;
+moon.shadow.camera.far  = 300;
+scene.add(moon);
+
+// stars
+const starGeo = new THREE.BufferGeometry();
+const starVerts = [];
+for (let i = 0; i < 1200; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi   = Math.acos(2 * Math.random() - 1);
+  const r = 280;
+  starVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.7 })));
+
+// moon sphere in sky
+const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(6, 16, 16), new THREE.MeshBasicMaterial({ color: 0xddeeff }));
+moonMesh.position.set(-120, 180, -160);
+scene.add(moonMesh);
 
 // ── GROUND ────────────────────────────────────────────────────────────────
 const groundGeo = new THREE.PlaneGeometry(320, 320, 64, 64);
 const posArr = groundGeo.attributes.position.array;
 for (let i = 0; i < posArr.length; i += 3) posArr[i + 2] += (Math.random() - 0.5) * 0.15;
 groundGeo.computeVertexNormals();
-const ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: 0x4CAF50 }));
+const ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: 0x1a3320 }));
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
@@ -175,7 +197,7 @@ scene.add(ground);
 for (let i = 0; i < 30; i++) {
   const p = new THREE.Mesh(
     new THREE.CircleGeometry(Math.random() * 9 + 3, 8),
-    new THREE.MeshLambertMaterial({ color: 0x388E3C })
+    new THREE.MeshLambertMaterial({ color: 0x1b2e1b })
   );
   p.rotation.x = -Math.PI / 2;
   p.position.set((Math.random() - 0.5) * 250, 0.01, (Math.random() - 0.5) * 250);
@@ -191,7 +213,7 @@ function addTree(x, z) {
   scene.add(trunk);
   const leaves = new THREE.Mesh(
     new THREE.ConeGeometry(2.8 + Math.random(), 5 + Math.random() * 2, 7),
-    new THREE.MeshLambertMaterial({ color: Math.random() > 0.5 ? 0x2E7D32 : 0x388E3C })
+    new THREE.MeshLambertMaterial({ color: Math.random() > 0.5 ? 0x1a3322 : 0x0d1f11 })
   );
   leaves.position.set(x, 7 + Math.random(), z); leaves.castShadow = true;
   scene.add(leaves);
@@ -720,14 +742,16 @@ function updateCamera(player) {
 // ── GAME MANAGEMENT ───────────────────────────────────────────────────────
 function endGame(winnerName) {
   gameOver = true;
-  const ws = document.getElementById('winner-screen');
-  ws.style.display = 'flex';
   if (winnerName === 'Du') {
-    document.getElementById('winner-text').textContent = '🏆 Du gewinnst!';
-    document.getElementById('secret-hint').style.display = 'block';
     openSecretDoor();
+    // small temporary hint then fades
+    const hint = document.getElementById('secret-hint');
+    hint.style.display = 'block';
+    setTimeout(() => hint.style.opacity = '0', 4000);
+    setTimeout(() => { hint.style.display = 'none'; hint.style.opacity = '1'; gameOver = false; }, 6000);
   } else {
-    document.getElementById('winner-text').textContent = '💀 Bot gewinnt!';
+    // bot wins: show restart button only
+    document.getElementById('winner-screen').style.display = 'flex';
   }
 }
 
