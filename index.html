@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>1v1 Battle Builder</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+canvas { display: block; }
+#ui {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; color: white;
+}
+.player-hud {
+  position: absolute; bottom: 20px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+#p1-hud { left: 20px; }
+#p2-hud { right: 20px; text-align: right; align-items: flex-end; }
+.health-bar-bg {
+  width: 180px; height: 14px;
+  background: rgba(0,0,0,0.5);
+  border: 2px solid rgba(255,255,255,0.4);
+  border-radius: 7px; overflow: hidden;
+}
+.health-bar { height: 100%; transition: width 0.15s; }
+.player-name { font-size: 13px; font-weight: bold; text-shadow: 1px 1px 2px #000; }
+.build-mode {
+  font-size: 11px; background: rgba(0,0,0,0.55);
+  padding: 3px 7px; border-radius: 4px; text-shadow: 1px 1px 2px #000;
+}
+.build-slots { display: flex; gap: 4px; }
+.slot {
+  width: 36px; height: 36px; background: rgba(0,0,0,0.55);
+  border: 2px solid rgba(255,255,255,0.3); border-radius: 5px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; font-size: 9px; gap: 1px;
+}
+.slot.active { border-color: #FFD700; background: rgba(255,215,0,0.2); }
+.slot-icon { font-size: 14px; }
+#divider {
+  position: absolute; top: 0; left: 50%; width: 2px; height: 100%;
+  background: rgba(255,255,255,0.25); transform: translateX(-50%);
+}
+#winner-screen {
+  display: none; position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%; background: rgba(0,0,0,0.75);
+  justify-content: center; align-items: center;
+  flex-direction: column; pointer-events: all;
+}
+#winner-screen h1 { font-size: 52px; color: #FFD700; text-shadow: 0 0 30px #FFD700; margin-bottom: 16px; }
+#winner-screen button {
+  font-size: 22px; padding: 12px 36px; cursor: pointer;
+  background: #e74c3c; color: white; border: none; border-radius: 8px;
+}
+#winner-screen button:hover { background: #c0392b; }
+.controls-card {
+  position: absolute; top: 10px;
+  background: rgba(0,0,0,0.6);
+  padding: 7px 11px; border-radius: 7px;
+  font-size: 10px; line-height: 1.7;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+#c1 { left: 10px; }
+#c2 { right: 10px; }
+#ammo1, #ammo2 { font-size: 11px; background: rgba(0,0,0,0.55); padding: 2px 7px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="ui">
+  <div id="divider"></div>
+
+  <div class="controls-card" id="c1">
+    <b style="color:#5B9BD5">Spieler 1</b><br>
+    WASD: Bewegen &nbsp;|&nbsp; Shift: Sprinten<br>
+    Q/R: Kamera drehen<br>
+    1/2/3/4: Baumodus &nbsp;|&nbsp; E: Bauen<br>
+    F: Schießen
+  </div>
+  <div class="controls-card" id="c2">
+    <b style="color:#E05252">Spieler 2</b><br>
+    Pfeiltasten: Bewegen &nbsp;|&nbsp; Ctrl: Sprinten<br>
+    Num7/Num9: Kamera<br>
+    Num1-4: Baumodus &nbsp;|&nbsp; Num0: Bauen<br>
+    Num5: Schießen
+  </div>
+
+  <div class="player-hud" id="p1-hud">
+    <div class="player-name" style="color:#5B9BD5">&#9673; Spieler 1</div>
+    <div class="health-bar-bg">
+      <div class="health-bar" id="p1-health" style="width:100%; background:#2ecc71;"></div>
+    </div>
+    <div class="build-slots">
+      <div class="slot" id="p1-s1"><span class="slot-icon">🟫</span><span>Boden</span></div>
+      <div class="slot" id="p1-s2"><span class="slot-icon">🧱</span><span>Wand</span></div>
+      <div class="slot" id="p1-s3"><span class="slot-icon">📐</span><span>Trep.</span></div>
+      <div class="slot" id="p1-s4"><span class="slot-icon">🏠</span><span>Dach</span></div>
+    </div>
+    <div id="ammo1">Munition: ∞</div>
+  </div>
+
+  <div class="player-hud" id="p2-hud">
+    <div class="player-name" style="color:#E05252">&#9673; Spieler 2</div>
+    <div class="health-bar-bg">
+      <div class="health-bar" id="p2-health" style="width:100%; background:#e74c3c;"></div>
+    </div>
+    <div class="build-slots">
+      <div class="slot" id="p2-s1"><span class="slot-icon">🟫</span><span>Boden</span></div>
+      <div class="slot" id="p2-s2"><span class="slot-icon">🧱</span><span>Wand</span></div>
+      <div class="slot" id="p2-s3"><span class="slot-icon">📐</span><span>Trep.</span></div>
+      <div class="slot" id="p2-s4"><span class="slot-icon">🏠</span><span>Dach</span></div>
+    </div>
+    <div id="ammo2">Munition: ∞</div>
+  </div>
+
+  <div id="winner-screen">
+    <h1 id="winner-text">Spieler X gewinnt!</h1>
+    <button onclick="restartGame()">🔄 Nochmal spielen</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script>
+// ── RENDERER ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.FogExp2(0xADD8E6, 0.006);
+
+// ── LIGHTING ──────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+const sun = new THREE.DirectionalLight(0xfffde7, 1.1);
+sun.position.set(40, 90, 30);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
+sun.shadow.camera.top  =  120; sun.shadow.camera.bottom = -120;
+sun.shadow.camera.far  = 300;
+scene.add(sun);
+
+// ── GROUND ────────────────────────────────────────────────────────────────
+const groundGeo = new THREE.PlaneGeometry(320, 320, 64, 64);
+// subtle vertex noise for organic feel
+const pos = groundGeo.attributes.position.array;
+for (let i = 0; i < pos.length; i += 3) pos[i + 2] += (Math.random() - 0.5) * 0.15;
+groundGeo.computeVertexNormals();
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x4CAF50 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+ground.name = 'ground';
+scene.add(ground);
+
+// darker grass patches
+for (let i = 0; i < 30; i++) {
+  const pg = new THREE.CircleGeometry(Math.random() * 9 + 3, 8);
+  const pm = new THREE.MeshLambertMaterial({ color: 0x388E3C });
+  const p = new THREE.Mesh(pg, pm);
+  p.rotation.x = -Math.PI / 2;
+  p.position.set((Math.random() - 0.5) * 250, 0.01, (Math.random() - 0.5) * 250);
+  scene.add(p);
+}
+
+// trees
+function addTree(x, z) {
+  const tm = new THREE.MeshLambertMaterial({ color: 0x6D4C41 });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 4, 7), tm);
+  trunk.position.set(x, 2, z);
+  trunk.castShadow = true;
+  scene.add(trunk);
+
+  const lm = new THREE.MeshLambertMaterial({ color: Math.random() > 0.5 ? 0x2E7D32 : 0x388E3C });
+  const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.8 + Math.random(), 5 + Math.random() * 2, 7), lm);
+  leaves.position.set(x, 7 + Math.random(), z);
+  leaves.castShadow = true;
+  scene.add(leaves);
+}
+for (let i = 0; i < 35; i++) {
+  let tx, tz;
+  do { tx = (Math.random() - 0.5) * 200; tz = (Math.random() - 0.5) * 200; }
+  while (Math.abs(tx) < 15 && Math.abs(tz) < 15); // keep center clear
+  addTree(tx, tz);
+}
+
+// rocks
+for (let i = 0; i < 15; i++) {
+  const rg = new THREE.DodecahedronGeometry(Math.random() * 1.2 + 0.5, 0);
+  const rm = new THREE.MeshLambertMaterial({ color: 0x9E9E9E });
+  const rock = new THREE.Mesh(rg, rm);
+  rock.rotation.set(Math.random(), Math.random(), Math.random());
+  rock.position.set((Math.random() - 0.5) * 180, 0.4, (Math.random() - 0.5) * 180);
+  rock.castShadow = true;
+  rock.receiveShadow = true;
+  scene.add(rock);
+}
+
+// ── CAMERAS ───────────────────────────────────────────────────────────────
+const camera1 = new THREE.PerspectiveCamera(70, 1, 0.1, 500);
+const camera2 = new THREE.PerspectiveCamera(70, 1, 0.1, 500);
+
+// ── BUILDING ──────────────────────────────────────────────────────────────
+const CELL = 4;
+const buildings = new Map();
+
+const buildDefs = {
+  1: { name:'Boden',  color:0x795548, h:0.3, getGeo:()=>new THREE.BoxGeometry(CELL-0.1, 0.3, CELL-0.1), offsetY:0.15 },
+  2: { name:'Wand',   color:0xBCAAA4, h:CELL, getGeo:()=>new THREE.BoxGeometry(CELL-0.1, CELL, 0.3),     offsetY:CELL/2 },
+  3: { name:'Treppe', color:0xA1887F, h:CELL, getGeo:null, offsetY:0 },
+  4: { name:'Dach',   color:0x6D4C41, h:0.3, getGeo:()=>new THREE.BoxGeometry(CELL-0.1, 0.3, CELL-0.1), offsetY:0.15 },
+};
+
+function snapGrid(v) { return Math.round(v / CELL) * CELL; }
+
+function placeBuilding(type, px, pz, facingAngle) {
+  const fx = Math.sin(facingAngle) * CELL * 0.9;
+  const fz = Math.cos(facingAngle) * CELL * 0.9;
+  const gx = snapGrid(px + fx);
+  const gz = snapGrid(pz + fz);
+  const key = `${type}_${gx}_${gz}`;
+  if (buildings.has(key)) return;
+
+  if (type === 3) { // stairs – 4 rising steps
+    const grp = new THREE.Group();
+    const sm = new THREE.MeshLambertMaterial({ color: 0xA1887F });
+    for (let s = 0; s < 4; s++) {
+      const sg = new THREE.BoxGeometry(CELL - 0.1, 0.3, CELL / 4 - 0.05);
+      const step = new THREE.Mesh(sg, sm);
+      step.position.set(0, s * 1.05, (s - 1.5) * CELL / 4);
+      step.castShadow = true; step.receiveShadow = true;
+      grp.add(step);
+    }
+    grp.position.set(gx, 0.15, gz);
+    grp.rotation.y = facingAngle;
+    scene.add(grp);
+    buildings.set(key, grp);
+    return;
+  }
+
+  const def = buildDefs[type];
+  const mesh = new THREE.Mesh(def.getGeo(), new THREE.MeshLambertMaterial({ color: def.color }));
+  mesh.position.set(gx, def.offsetY, gz);
+  if (type === 2) mesh.rotation.y = facingAngle;
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+  buildings.set(key, mesh);
+}
+
+// ── HUMANOID ──────────────────────────────────────────────────────────────
+function createHumanoid(bodyColor, pantsColor) {
+  const g = new THREE.Group();
+
+  const skin   = new THREE.MeshLambertMaterial({ color: 0xFFCBA4 });
+  const body   = new THREE.MeshLambertMaterial({ color: bodyColor });
+  const pants  = new THREE.MeshLambertMaterial({ color: pantsColor });
+  const shoes  = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const hair   = new THREE.MeshLambertMaterial({ color: 0x4E342E });
+  const eyeM   = new THREE.MeshLambertMaterial({ color: 0x1565C0 });
+
+  function add(geo, mat, x, y, z, rx, ry, rz) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (rx) m.rotation.x = rx;
+    if (ry) m.rotation.y = ry;
+    if (rz) m.rotation.z = rz;
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  }
+
+  // legs
+  const legG = new THREE.BoxGeometry(0.32, 0.9, 0.32);
+  const legL = add(legG, pants, -0.2, 0.45, 0);
+  const legR = add(legG, pants,  0.2, 0.45, 0);
+  g.userData.legL = legL; g.userData.legR = legR;
+
+  // shoes
+  const shoeG = new THREE.BoxGeometry(0.33, 0.15, 0.42);
+  add(shoeG, shoes, -0.2, 0.075,  0.05);
+  add(shoeG, shoes,  0.2, 0.075,  0.05);
+
+  // torso
+  add(new THREE.BoxGeometry(0.88, 0.85, 0.44), body, 0, 1.12, 0);
+
+  // arms
+  const armG = new THREE.BoxGeometry(0.27, 0.78, 0.27);
+  const armL = add(armG, body, -0.58, 1.1, 0);
+  const armR = add(armG, body,  0.58, 1.1, 0);
+  g.userData.armL = armL; g.userData.armR = armR;
+
+  // gun (right arm)
+  const gunGrp = new THREE.Group();
+  gunGrp.add((() => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.52), new THREE.MeshLambertMaterial({ color: 0x212121 }));
+    m.position.set(0, 0, 0.26);
+    return m;
+  })());
+  gunGrp.add((() => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.1), new THREE.MeshLambertMaterial({ color: 0x263238 }));
+    m.position.set(0, -0.1, 0.08);
+    return m;
+  })());
+  gunGrp.position.set(0.58, 1.1, 0.15);
+  g.add(gunGrp);
+  g.userData.gun = gunGrp;
+
+  // head
+  add(new THREE.BoxGeometry(0.68, 0.72, 0.68), skin, 0, 1.68, 0);
+  // hair
+  add(new THREE.BoxGeometry(0.7, 0.22, 0.7), hair, 0, 2.03, 0);
+  // ears
+  add(new THREE.BoxGeometry(0.08, 0.22, 0.22), skin, -0.38, 1.68, 0);
+  add(new THREE.BoxGeometry(0.08, 0.22, 0.22), skin,  0.38, 1.68, 0);
+  // eyes
+  add(new THREE.BoxGeometry(0.13, 0.09, 0.05), eyeM, -0.17, 1.69, 0.35);
+  add(new THREE.BoxGeometry(0.13, 0.09, 0.05), eyeM,  0.17, 1.69, 0.35);
+  // nose
+  add(new THREE.BoxGeometry(0.07, 0.07, 0.08), skin, 0, 1.60, 0.37);
+  // mouth
+  add(new THREE.BoxGeometry(0.2, 0.04, 0.05), new THREE.MeshLambertMaterial({ color: 0xbf8060 }), 0, 1.52, 0.36);
+
+  return g;
+}
+
+// ── BULLETS ───────────────────────────────────────────────────────────────
+const bulletGeo = new THREE.SphereGeometry(0.1, 5, 5);
+const bulletMat = new THREE.MeshBasicMaterial({ color: 0xFFFF44 });
+const BULLET_SPEED = 1.1;
+const BULLET_DAMAGE = 25;
+const BULLET_LIFE  = 90;
+let bullets = [];
+
+class Bullet {
+  constructor(pos, angle, ownerId) {
+    this.ownerId = ownerId;
+    this.angle   = angle;
+    this.life    = BULLET_LIFE;
+    this.mesh    = new THREE.Mesh(bulletGeo, bulletMat);
+    this.mesh.position.copy(pos);
+    scene.add(this.mesh);
+
+    // muzzle flash
+    const flash = new THREE.Mesh(
+      new THREE.SphereGeometry(0.25, 5, 5),
+      new THREE.MeshBasicMaterial({ color: 0xFF8800 })
+    );
+    flash.position.copy(pos);
+    scene.add(flash);
+    setTimeout(() => scene.remove(flash), 60);
+  }
+
+  update(players) {
+    this.mesh.position.x += Math.sin(this.angle) * BULLET_SPEED;
+    this.mesh.position.z += Math.cos(this.angle) * BULLET_SPEED;
+    this.life--;
+
+    for (const pl of players) {
+      if (pl.id === this.ownerId || pl.isDead) continue;
+      if (this.mesh.position.distanceTo(pl.mesh.position) < 1.3) {
+        pl.takeDamage(BULLET_DAMAGE);
+        this.life = 0;
+        break;
+      }
+    }
+
+    if (this.life <= 0) { scene.remove(this.mesh); return false; }
+    return true;
+  }
+}
+
+// ── PLAYER ────────────────────────────────────────────────────────────────
+let players = [];
+let gameOver = false;
+
+class Player {
+  constructor(id, bodyColor, pantsColor, startX, startZ, ctrl, cam) {
+    this.id        = id;
+    this.ctrl      = ctrl;
+    this.camera    = cam;
+    this.health    = 100;
+    this.isDead    = false;
+    this.buildMode = 0;
+    this.facing    = id === 1 ? Math.PI : 0; // face each other
+    this.shootCD   = 0;
+    this.buildCD   = 0;
+    this.walkT     = 0;
+    this.camAngleY = id === 1 ? 0 : Math.PI;
+
+    this.mesh = createHumanoid(bodyColor, pantsColor);
+    this.mesh.position.set(startX, 0, startZ);
+    this.mesh.rotation.y = this.facing;
+    scene.add(this.mesh);
+  }
+
+  update(keys) {
+    if (this.isDead) return;
+    const c = this.ctrl;
+    let dx = 0, dz = 0;
+
+    if (keys[c.left])  dx -= 1;
+    if (keys[c.right]) dx += 1;
+    if (keys[c.up])    dz -= 1;
+    if (keys[c.down])  dz += 1;
+
+    // camera rotation
+    if (keys[c.camL]) { this.camAngleY -= 0.03; keys[c.camL] = false; }
+    if (keys[c.camR]) { this.camAngleY += 0.03; keys[c.camR] = false; }
+    // holding
+    if (keys[c.camLH]) this.camAngleY -= 0.025;
+    if (keys[c.camRH]) this.camAngleY += 0.025;
+
+    const sprint = keys[c.sprint] ? 1.9 : 1;
+
+    if (dx !== 0 || dz !== 0) {
+      // movement relative to camera
+      const worldAngle = Math.atan2(dx, dz) + this.camAngleY;
+      this.facing = worldAngle;
+      this.mesh.rotation.y = worldAngle;
+      const spd = 0.13 * sprint;
+      this.mesh.position.x += Math.sin(worldAngle) * spd;
+      this.mesh.position.z += Math.cos(worldAngle) * spd;
+      this.mesh.position.x = Math.max(-145, Math.min(145, this.mesh.position.x));
+      this.mesh.position.z = Math.max(-145, Math.min(145, this.mesh.position.z));
+
+      this.walkT += 0.18 * sprint;
+      const sw = Math.sin(this.walkT) * 0.45;
+      this.mesh.userData.legL.rotation.x =  sw;
+      this.mesh.userData.legR.rotation.x = -sw;
+      this.mesh.userData.armL.rotation.x = -sw * 0.6;
+      this.mesh.userData.armR.rotation.x =  sw * 0.6;
+    } else {
+      this.mesh.userData.legL.rotation.x *= 0.75;
+      this.mesh.userData.legR.rotation.x *= 0.75;
+      this.mesh.userData.armL.rotation.x *= 0.75;
+      this.mesh.userData.armR.rotation.x *= 0.75;
+    }
+
+    // build mode toggle
+    for (let i = 1; i <= 4; i++) {
+      if (keys[c['b' + i]]) {
+        this.buildMode = (this.buildMode === i) ? 0 : i;
+        keys[c['b' + i]] = false;
+        this.updateSlots();
+      }
+    }
+
+    // place building
+    if (keys[c.build] && this.buildMode > 0 && this.buildCD <= 0) {
+      placeBuilding(this.buildMode, this.mesh.position.x, this.mesh.position.z, this.facing);
+      this.buildCD = 18;
+      keys[c.build] = false;
+    }
+
+    // shoot
+    if (keys[c.shoot] && this.shootCD <= 0) {
+      const sp = this.mesh.position.clone();
+      sp.y = 1.1;
+      bullets.push(new Bullet(sp, this.facing, this.id));
+      this.shootCD = 22;
+      keys[c.shoot] = false;
+
+      // recoil animation
+      this.mesh.userData.armR.rotation.x = -0.5;
+    }
+
+    if (this.shootCD > 0) this.shootCD--;
+    if (this.buildCD  > 0) this.buildCD--;
+
+    this.updateCamera();
+    this.updateHUD();
+  }
+
+  takeDamage(amount) {
+    this.health = Math.max(0, this.health - amount);
+    if (this.health <= 0 && !this.isDead) {
+      this.isDead = true;
+      this.mesh.rotation.z = Math.PI / 2;
+      this.mesh.position.y = -0.3;
+      endGame(this.id === 1 ? 2 : 1);
+    }
+  }
+
+  updateCamera() {
+    const px = this.mesh.position.x;
+    const py = this.mesh.position.y;
+    const pz = this.mesh.position.z;
+    const dist = 9, pitch = 0.42;
+    const cx = px - Math.sin(this.camAngleY) * dist * Math.cos(pitch);
+    const cz = pz - Math.cos(this.camAngleY) * dist * Math.cos(pitch);
+    const cy = py + dist * Math.sin(pitch) + 0.8;
+    this.camera.position.set(cx, cy, cz);
+    this.camera.lookAt(px, py + 1.5, pz);
+  }
+
+  updateHUD() {
+    const pct = (this.health / 100 * 100) + '%';
+    document.getElementById('p' + this.id + '-health').style.width = pct;
+  }
+
+  updateSlots() {
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('p' + this.id + '-s' + i);
+      el.classList.toggle('active', this.buildMode === i);
+    }
+  }
+}
+
+// ── INPUT ─────────────────────────────────────────────────────────────────
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true;  e.preventDefault(); });
+window.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+const ctrl1 = {
+  up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
+  sprint:'ShiftLeft',
+  b1:'Digit1', b2:'Digit2', b3:'Digit3', b4:'Digit4',
+  build:'KeyE',
+  shoot:'KeyF',
+  camL:'KeyQ', camR:'KeyR',     // tap
+  camLH:'',   camRH:'',         // hold (unused for p1)
+};
+const ctrl2 = {
+  up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight',
+  sprint:'ControlRight',
+  b1:'Numpad1', b2:'Numpad2', b3:'Numpad3', b4:'Numpad4',
+  build:'Numpad0',
+  shoot:'Numpad5',
+  camL:'Numpad7', camR:'Numpad9',
+  camLH:'Numpad7', camRH:'Numpad9',
+};
+
+// ── GAME MANAGEMENT ───────────────────────────────────────────────────────
+function endGame(winnerId) {
+  gameOver = true;
+  const ws = document.getElementById('winner-screen');
+  ws.style.display = 'flex';
+  document.getElementById('winner-text').textContent =
+    `🏆 Spieler ${winnerId} gewinnt!`;
+}
+
+function restartGame() {
+  // clear bullets
+  bullets.forEach(b => scene.remove(b.mesh));
+  bullets = [];
+  // clear buildings
+  buildings.forEach(b => scene.remove(b));
+  buildings.clear();
+  // remove players
+  players.forEach(p => scene.remove(p.mesh));
+  players = [];
+
+  document.getElementById('winner-screen').style.display = 'none';
+  gameOver = false;
+  initPlayers();
+}
+
+function initPlayers() {
+  players.push(new Player(1, 0x1565C0, 0x37474F, -22, 0, ctrl1, camera1));
+  players.push(new Player(2, 0xB71C1C, 0x263238,  22, 0, ctrl2, camera2));
+  players.forEach(p => p.updateSlots());
+}
+
+// ── RESIZE ────────────────────────────────────────────────────────────────
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  const a = (w / 2) / h;
+  camera1.aspect = a; camera1.updateProjectionMatrix();
+  camera2.aspect = a; camera2.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── LOOP ──────────────────────────────────────────────────────────────────
+function loop() {
+  requestAnimationFrame(loop);
+
+  if (!gameOver) {
+    players.forEach(p => p.update(keys));
+    bullets = bullets.filter(b => b.update(players));
+  }
+
+  // split-screen render
+  const w = renderer.domElement.width;
+  const h = renderer.domElement.height;
+  renderer.setScissorTest(true);
+
+  renderer.setViewport(0,   0, w/2, h);
+  renderer.setScissor (0,   0, w/2, h);
+  renderer.render(scene, camera1);
+
+  renderer.setViewport(w/2, 0, w/2, h);
+  renderer.setScissor (w/2, 0, w/2, h);
+  renderer.render(scene, camera2);
+
+  renderer.setScissorTest(false);
+}
+
+initPlayers();
+loop();
+</script>
+</body>
+</html>
