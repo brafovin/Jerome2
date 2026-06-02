@@ -204,6 +204,187 @@ for (let i = 0; i < 30; i++) {
   scene.add(p);
 }
 
+// ── STREETS ───────────────────────────────────────────────────────────────
+const roadMat  = new THREE.MeshLambertMaterial({ color: 0x222222 });
+const lineMat  = new THREE.MeshLambertMaterial({ color: 0xdddd00 });
+const sidewalkMat = new THREE.MeshLambertMaterial({ color: 0x555566 });
+
+// Road grid: streets every 40 units from -120 to 120
+const ROAD_W = 8;
+const streetPositions = [-80, -40, 0, 40, 80];
+
+for (const s of streetPositions) {
+  // horizontal road (along X)
+  const rh = new THREE.Mesh(new THREE.PlaneGeometry(280, ROAD_W), roadMat);
+  rh.rotation.x = -Math.PI / 2; rh.position.set(0, 0.02, s);
+  scene.add(rh);
+  // vertical road (along Z)
+  const rv = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 280), roadMat);
+  rv.rotation.x = -Math.PI / 2; rv.position.set(s, 0.02, 0);
+  scene.add(rv);
+
+  // dashed center line horizontal
+  for (let x = -130; x < 130; x += 8) {
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.2), lineMat);
+    dash.rotation.x = -Math.PI / 2; dash.position.set(x, 0.03, s);
+    scene.add(dash);
+  }
+  // dashed center line vertical
+  for (let z = -130; z < 130; z += 8) {
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 4), lineMat);
+    dash.rotation.x = -Math.PI / 2; dash.position.set(s, 0.03, z);
+    scene.add(dash);
+  }
+  // sidewalks
+  for (const side of [-1, 1]) {
+    const swH = new THREE.Mesh(new THREE.PlaneGeometry(280, 1.5), sidewalkMat);
+    swH.rotation.x = -Math.PI / 2; swH.position.set(0, 0.025, s + side * (ROAD_W/2 + 0.75));
+    scene.add(swH);
+    const swV = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 280), sidewalkMat);
+    swV.rotation.x = -Math.PI / 2; swV.position.set(s + side * (ROAD_W/2 + 0.75), 0.025, 0);
+    scene.add(swV);
+  }
+}
+
+// ── STREET LAMPS ──────────────────────────────────────────────────────────
+function addLamp(x, z) {
+  // pole
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.15, 7, 6),
+    new THREE.MeshLambertMaterial({ color: 0x444444 })
+  );
+  pole.position.set(x, 3.5, z);
+  pole.castShadow = true;
+  scene.add(pole);
+
+  // arm
+  const arm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.1, 1.4),
+    new THREE.MeshLambertMaterial({ color: 0x444444 })
+  );
+  arm.position.set(x, 7.1, z - 0.7);
+  scene.add(arm);
+
+  // lamp head
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.3, 0.9),
+    new THREE.MeshLambertMaterial({ color: 0x333333 })
+  );
+  head.position.set(x, 6.9, z - 1.3);
+  scene.add(head);
+
+  // glowing bulb
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 6, 6),
+    new THREE.MeshBasicMaterial({ color: 0xFFEE99 })
+  );
+  bulb.position.set(x, 6.75, z - 1.3);
+  scene.add(bulb);
+
+  // point light (warm yellow)
+  const light = new THREE.PointLight(0xFFCC55, 1.8, 22);
+  light.position.set(x, 6.5, z - 1.3);
+  scene.add(light);
+}
+
+// place lamps along every street every 20 units
+for (const s of streetPositions) {
+  for (let t = -120; t <= 120; t += 20) {
+    addLamp(t, s + ROAD_W/2 + 1.8);
+    addLamp(s + ROAD_W/2 + 1.8, t);
+  }
+}
+
+// ── HOUSES ────────────────────────────────────────────────────────────────
+const houseColors = [0x8D6E63, 0x78909C, 0xA1887F, 0x7986CB, 0x4DB6AC, 0xF06292];
+const roofColors  = [0xb71c1c, 0x4a148c, 0x1a237e, 0x1b5e20, 0x37474F];
+
+function addHouse(x, z, ry) {
+  const w = 7 + Math.floor(Math.random() * 5);
+  const d = 6 + Math.floor(Math.random() * 4);
+  const h = 4 + Math.floor(Math.random() * 4);
+  const col  = houseColors[Math.floor(Math.random() * houseColors.length)];
+  const rcol = roofColors [Math.floor(Math.random() * roofColors.length)];
+
+  const grp = new THREE.Group();
+  grp.position.set(x, 0, z);
+  grp.rotation.y = ry || 0;
+
+  // walls
+  const walls = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshLambertMaterial({ color: col })
+  );
+  walls.position.y = h / 2;
+  walls.castShadow = true; walls.receiveShadow = true;
+  grp.add(walls);
+
+  // roof (prism shape via scaled box)
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(Math.max(w, d) * 0.72, 3, 4),
+    new THREE.MeshLambertMaterial({ color: rcol })
+  );
+  roof.position.y = h + 1.5;
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  grp.add(roof);
+
+  // door
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 2.0, 0.1),
+    new THREE.MeshLambertMaterial({ color: 0x4E342E })
+  );
+  door.position.set(0, 1.0, d / 2 + 0.05);
+  grp.add(door);
+
+  // windows
+  const winMat = new THREE.MeshBasicMaterial({ color: 0xFFEE88 }); // lit windows at night
+  const winPositions = [
+    [-w/2 + 1.5, h*0.6, d/2 + 0.05],
+    [ w/2 - 1.5, h*0.6, d/2 + 0.05],
+    [-w/2 - 0.05, h*0.6, 0],
+    [ w/2 + 0.05, h*0.6, 0],
+  ];
+  for (const [wx, wy, wz] of winPositions) {
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), winMat);
+    win.position.set(wx, wy, wz);
+    if (Math.abs(wz) < 0.1) win.rotation.y = Math.PI / 2;
+    grp.add(win);
+    // subtle warm glow from window
+    const wl = new THREE.PointLight(0xFFCC44, 0.4, 8);
+    wl.position.set(wx, wy, wz);
+    grp.add(wl);
+  }
+
+  scene.add(grp);
+}
+
+// Place houses in blocks between streets (avoid roads ±5 and spawn/secret room area)
+function isOnRoad(x, z) {
+  for (const s of streetPositions) {
+    if (Math.abs(x - s) < ROAD_W/2 + 3) return true;
+    if (Math.abs(z - s) < ROAD_W/2 + 3) return true;
+  }
+  return false;
+}
+
+// fill blocks
+for (let bx = -110; bx <= 110; bx += 40) {
+  for (let bz = -110; bz <= 110; bz += 40) {
+    // each block: up to 4 houses
+    const offsets = [[-8,-8],[8,-8],[-8,8],[8,8]];
+    for (const [ox, oz] of offsets) {
+      const hx = bx + ox + (Math.random()-0.5)*4;
+      const hz = bz + oz + (Math.random()-0.5)*4;
+      // skip start area, spawn, secret room
+      if (Math.abs(hx) < 25 && Math.abs(hz) < 10) continue;
+      if (Math.abs(hx - 55) < 15 && Math.abs(hz - 55) < 15) continue;
+      if (isOnRoad(hx, hz)) continue;
+      addHouse(hx, hz, Math.floor(Math.random()*4) * Math.PI/2);
+    }
+  }
+}
+
 function addTree(x, z) {
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.3, 0.5, 4, 7),
