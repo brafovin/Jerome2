@@ -66,6 +66,17 @@ canvas { display: block; }
 }
 #winner-screen button:hover { background: #c0392b; }
 /* ── Crosshair ── */
+#lock-hint {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45); pointer-events: none;
+}
+#lock-box {
+  background: rgba(0,0,0,0.75); color: white;
+  padding: 18px 32px; border-radius: 10px;
+  font-size: 18px; text-align: center; line-height: 1.8;
+  border: 1px solid rgba(255,255,255,0.3);
+}
 #crosshair {
   position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
@@ -82,13 +93,16 @@ canvas { display: block; }
 <canvas id="canvas"></canvas>
 <div id="ui">
   <div id="crosshair"></div>
+  <div id="lock-hint">
+    <div id="lock-box">🖱️ Klicke um Maus zu sperren<br><small>ESC = freigeben</small></div>
+  </div>
 
   <div id="ctrl-card">
     <b style="color:#5B9BD5">Du (Blau)</b><br>
     WASD: Bewegen &nbsp;|&nbsp; Shift: Sprinten<br>
-    Q / R: Kamera drehen<br>
+    Maus: Umsehen<br>
     1 / 2 / 3 / 4: Baumodus &nbsp;|&nbsp; E: Bauen<br>
-    F / Linksklick: Schießen
+    Linksklick / F: Schießen
   </div>
 
   <!-- Bot HUD top-right -->
@@ -510,16 +524,32 @@ class Bot extends Player {
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true;  e.preventDefault(); });
 window.addEventListener('keyup',   e => { keys[e.code] = false; });
-window.addEventListener('mousedown', e => { if (e.button === 0) keys['KeyF'] = true; });
-window.addEventListener('mouseup',   e => { if (e.button === 0) keys['KeyF'] = false; });
+window.addEventListener('mousedown', e => {
+  if (e.button === 0) {
+    if (!document.pointerLockElement) {
+      canvas.requestPointerLock();
+    } else {
+      keys['KeyF'] = true;
+    }
+  }
+});
+window.addEventListener('mouseup', e => { if (e.button === 0) keys['KeyF'] = false; });
+
+document.addEventListener('pointerlockchange', () => {
+  document.getElementById('lock-hint').style.display =
+    document.pointerLockElement ? 'none' : 'flex';
+});
+
+document.addEventListener('mousemove', e => {
+  if (document.pointerLockElement) {
+    camAngleY += e.movementX * 0.003;
+  }
+});
 
 // ── CAMERA UPDATE ─────────────────────────────────────────────────────────
 let camAngleY = 0;
 
 function updateCamera(player) {
-  // Q / R to rotate camera
-  if (keys['KeyQ']) camAngleY -= 0.03;
-  if (keys['KeyR']) camAngleY += 0.03;
   player.camAngleY = camAngleY;
 
   const px = player.mesh.position.x;
