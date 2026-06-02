@@ -546,23 +546,35 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('mousemove', e => {
   if (document.pointerLockElement) {
     camAngleY += e.movementX * 0.003;
+    camAngleX = Math.max(-0.55, Math.min(0.55, camAngleX - e.movementY * 0.003));
   }
 });
 
 // ── CAMERA UPDATE ─────────────────────────────────────────────────────────
 let camAngleY = 0;
+let camAngleX = 0.42; // vertical pitch (start slightly above)
 
 function updateCamera(player) {
   player.camAngleY = camAngleY;
 
   const px = player.mesh.position.x;
+  const py = player.mesh.position.y;
   const pz = player.mesh.position.z;
-  const dist = 9, pitch = 0.42;
-  const cx = px - Math.sin(camAngleY) * dist * Math.cos(pitch);
-  const cz = pz - Math.cos(camAngleY) * dist * Math.cos(pitch);
-  const cy = player.mesh.position.y + dist * Math.sin(pitch) + 0.8;
+  const dist = 9;
+  const cx = px - Math.sin(camAngleY) * dist * Math.cos(camAngleX);
+  const cz = pz - Math.cos(camAngleY) * dist * Math.cos(camAngleX);
+  const cy = py + dist * Math.sin(camAngleX) + 0.8;
   camera.position.set(cx, cy, cz);
-  camera.lookAt(px, player.mesh.position.y + 1.5, pz);
+
+  // look-at target shifts up/down with pitch
+  const lookY = py + 1.5 + Math.sin(camAngleX) * 6;
+  camera.lookAt(px, lookY, pz);
+
+  // tilt player head up/down to match vertical look
+  const head = player.mesh.children.find(
+    c => c.geometry && Math.abs(c.geometry.parameters.width - 0.68) < 0.01
+  );
+  if (head) head.rotation.x = -camAngleX * 0.8;
 }
 
 // ── GAME MANAGEMENT ───────────────────────────────────────────────────────
@@ -582,6 +594,7 @@ function restartGame() {
   players.forEach(p => scene.remove(p.mesh));
   players = [];
   camAngleY = 0;
+  camAngleX = 0.42;
   botProvoked = false;
   document.getElementById('winner-screen').style.display = 'none';
   gameOver = false;
