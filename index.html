@@ -151,34 +151,14 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-// ── SUNSET SKY (gradient sphere) ──────────────────────────────────────────
-const skyCanvas = document.createElement('canvas');
-skyCanvas.width = 4; skyCanvas.height = 256;
-const skyCtx = skyCanvas.getContext('2d');
-const skyGrad = skyCtx.createLinearGradient(0, 0, 0, 256);
-skyGrad.addColorStop(0.0,  '#0d0a2e'); // deep purple top
-skyGrad.addColorStop(0.35, '#7b2d8b'); // purple
-skyGrad.addColorStop(0.55, '#d4522a'); // orange-red
-skyGrad.addColorStop(0.72, '#f0932b'); // orange
-skyGrad.addColorStop(0.85, '#ffd580'); // yellow near horizon
-skyGrad.addColorStop(1.0,  '#ffe0a0'); // warm white horizon
-skyCtx.fillStyle = skyGrad;
-skyCtx.fillRect(0, 0, 4, 256);
-const skyTex = new THREE.CanvasTexture(skyCanvas);
-skyTex.mapping = THREE.EquirectangularReflectionMapping;
-const skySphere = new THREE.Mesh(
-  new THREE.SphereGeometry(450, 32, 16),
-  new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide })
-);
-scene.add(skySphere);
-scene.fog = new THREE.FogExp2(0xf0932b, 0.007);
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.Fog(0xd0eeff, 80, 300);
 
-// ── LIGHTING (sunset) ─────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0xff9966, 0.5));
+// ── LIGHTING (day) ────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
-// low sun on the horizon
-const sun = new THREE.DirectionalLight(0xff6622, 1.4);
-sun.position.set(-80, 18, -60);
+const sun = new THREE.DirectionalLight(0xfffde7, 1.3);
+sun.position.set(60, 120, 40);
 sun.castShadow = true;
 sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
 sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
@@ -186,36 +166,28 @@ sun.shadow.camera.top  =  120; sun.shadow.camera.bottom = -120;
 sun.shadow.camera.far  = 300;
 scene.add(sun);
 
-// sun disc
-const sunDisc = new THREE.Mesh(
-  new THREE.SphereGeometry(8, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0xFFDD44 })
-);
-sunDisc.position.set(-320, 55, -240);
-scene.add(sunDisc);
-// sun glow halo
-const haloMat = new THREE.MeshBasicMaterial({ color: 0xFF8800, transparent: true, opacity: 0.18 });
-const halo = new THREE.Mesh(new THREE.SphereGeometry(22, 16, 16), haloMat);
-halo.position.copy(sunDisc.position);
-scene.add(halo);
-
-// few early stars appearing
-const starGeo = new THREE.BufferGeometry();
-const starVerts = [];
-for (let i = 0; i < 300; i++) {
-  const theta = Math.random() * Math.PI * 2;
-  const phi   = Math.acos(2 * Math.random() - 1);
-  starVerts.push(280 * Math.sin(phi)*Math.cos(theta), Math.abs(280 * Math.cos(phi)) + 30, 280 * Math.sin(phi)*Math.sin(theta));
+// clouds
+function addCloud(x, y, z) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const grp = new THREE.Group();
+  [[0,0,0,5,2.5,5],[4,0.5,0,4,2,4],[-4,0.5,0,4,2,4],[0,0,3,4,2,4],[0,0,-3,4,2,4]].forEach(([cx,cy,cz,cw,ch,cd]) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1,7,7), mat);
+    m.scale.set(cw/2, ch/2, cd/2);
+    m.position.set(cx, cy, cz);
+    grp.add(m);
+  });
+  grp.position.set(x, y, z);
+  scene.add(grp);
 }
-starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
-scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.55, transparent: true, opacity: 0.6 })));
+for (let i = 0; i < 14; i++)
+  addCloud((Math.random()-0.5)*280, 60+Math.random()*40, (Math.random()-0.5)*280);
 
 // ── GROUND ────────────────────────────────────────────────────────────────
 const groundGeo = new THREE.PlaneGeometry(320, 320, 64, 64);
 const posArr = groundGeo.attributes.position.array;
 for (let i = 0; i < posArr.length; i += 3) posArr[i + 2] += (Math.random() - 0.5) * 0.15;
 groundGeo.computeVertexNormals();
-const ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: 0x4a6630 }));
+const ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: 0x4CAF50 }));
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
@@ -223,7 +195,7 @@ scene.add(ground);
 for (let i = 0; i < 30; i++) {
   const p = new THREE.Mesh(
     new THREE.CircleGeometry(Math.random() * 9 + 3, 8),
-    new THREE.MeshLambertMaterial({ color: 0x3a5520 })
+    new THREE.MeshLambertMaterial({ color: 0x388E3C })
   );
   p.rotation.x = -Math.PI / 2;
   p.position.set((Math.random() - 0.5) * 250, 0.01, (Math.random() - 0.5) * 250);
@@ -420,7 +392,7 @@ function addTree(x, z) {
   scene.add(trunk);
   const leaves = new THREE.Mesh(
     new THREE.ConeGeometry(2.8 + Math.random(), 5 + Math.random() * 2, 7),
-    new THREE.MeshLambertMaterial({ color: Math.random() > 0.5 ? 0x2d5a1b : 0x1e3d10 })
+    new THREE.MeshLambertMaterial({ color: Math.random() > 0.5 ? 0x2E7D32 : 0x388E3C })
   );
   leaves.position.set(x, 7 + Math.random(), z); leaves.castShadow = true;
   scene.add(leaves);
