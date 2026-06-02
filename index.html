@@ -152,7 +152,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
-scene.fog = new THREE.Fog(0xd0eeff, 80, 300);
+scene.fog = new THREE.Fog(0xcfeaff, 220, 620);
 
 // ── LIGHTING (day) ────────────────────────────────────────────────────────
 scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -183,14 +183,72 @@ for (let i = 0; i < 14; i++)
   addCloud((Math.random()-0.5)*280, 60+Math.random()*40, (Math.random()-0.5)*280);
 
 // ── GROUND ────────────────────────────────────────────────────────────────
-const groundGeo = new THREE.PlaneGeometry(320, 320, 64, 64);
+// Large ground plane. The central play-area (where the city sits) stays flat,
+// while the outer edges roll into gentle hills so the world has a visible
+// horizon instead of dissolving into empty fog.
+const GROUND_SIZE = 600;
+const groundGeo = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, 96, 96);
 const posArr = groundGeo.attributes.position.array;
-for (let i = 0; i < posArr.length; i += 3) posArr[i + 2] += (Math.random() - 0.5) * 0.15;
+for (let i = 0; i < posArr.length; i += 3) {
+  const gx = posArr[i], gy = posArr[i + 1];           // plane is in XY before rotation
+  const radial = Math.sqrt(gx * gx + gy * gy);
+  // flat until r=150, then rolling hills that grow toward the edges
+  const hill = Math.max(0, radial - 150) / 130;
+  const roll = (Math.sin(gx * 0.03) + Math.cos(gy * 0.035) + Math.sin((gx + gy) * 0.02)) * 4;
+  posArr[i + 2] += roll * hill + (Math.random() - 0.5) * 0.15;
+}
 groundGeo.computeVertexNormals();
-const ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: 0x4CAF50 }));
+const ground = new THREE.Mesh(
+  groundGeo,
+  new THREE.MeshLambertMaterial({ color: 0x57B85A, side: THREE.DoubleSide })
+);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
+
+// ── DISTANT LANDSCAPE (mountain ring) ───────────────────────────────────────
+// A ring of mountains around the play area gives the world a clear, visible
+// silhouette on the horizon — the "Gegend" the player can actually see.
+function addMountain(x, z, h, r, snow) {
+  const grp = new THREE.Group();
+  const rockCol = [0x6D8C5A, 0x5E7D4F, 0x7A6B55][Math.floor(Math.random() * 3)];
+  const peak = new THREE.Mesh(
+    new THREE.ConeGeometry(r, h, 7 + Math.floor(Math.random() * 4)),
+    new THREE.MeshLambertMaterial({ color: rockCol, flatShading: true })
+  );
+  peak.position.y = h / 2;
+  peak.castShadow = true; peak.receiveShadow = true;
+  grp.add(peak);
+  if (snow) {
+    const cap = new THREE.Mesh(
+      new THREE.ConeGeometry(r * 0.4, h * 0.32, 7),
+      new THREE.MeshLambertMaterial({ color: 0xF5F7FF, flatShading: true })
+    );
+    cap.position.y = h - h * 0.16;
+    grp.add(cap);
+  }
+  grp.position.set(x, 0, z);
+  grp.rotation.y = Math.random() * Math.PI;
+  scene.add(grp);
+}
+const MOUNT_COUNT = 60;
+for (let i = 0; i < MOUNT_COUNT; i++) {
+  const a = (i / MOUNT_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.08;
+  const dist = 230 + Math.random() * 60;
+  const h = 35 + Math.random() * 55;
+  const r = 22 + Math.random() * 26;
+  addMountain(Math.cos(a) * dist, Math.sin(a) * dist, h, r, h > 60);
+}
+
+// ── LAKE ────────────────────────────────────────────────────────────────────
+// A calm lake off to one side adds an obvious landmark on the landscape.
+const lake = new THREE.Mesh(
+  new THREE.CircleGeometry(34, 48),
+  new THREE.MeshLambertMaterial({ color: 0x2E86C1, transparent: true, opacity: 0.85 })
+);
+lake.rotation.x = -Math.PI / 2;
+lake.position.set(-115, 0.05, -110);
+scene.add(lake);
 
 for (let i = 0; i < 30; i++) {
   const p = new THREE.Mesh(
@@ -415,7 +473,7 @@ for (let i = 0; i < 15; i++) {
 }
 
 // ── CAMERA ────────────────────────────────────────────────────────────────
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1500);
 
 // ── BUILDING ──────────────────────────────────────────────────────────────
 const CELL = 4;
