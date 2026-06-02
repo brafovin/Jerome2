@@ -546,7 +546,6 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('mousemove', e => {
   if (document.pointerLockElement) {
     camAngleY += e.movementX * 0.003;
-    camAngleX = Math.max(-0.55, Math.min(0.55, camAngleX - e.movementY * 0.003));
   }
 });
 
