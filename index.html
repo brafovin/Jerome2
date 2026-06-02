@@ -88,7 +88,7 @@ canvas { display: block; }
     WASD: Bewegen &nbsp;|&nbsp; Shift: Sprinten<br>
     Q / R: Kamera drehen<br>
     1 / 2 / 3 / 4: Baumodus &nbsp;|&nbsp; E: Bauen<br>
-    F: Schießen
+    F / Linksklick: Schießen
   </div>
 
   <!-- Bot HUD top-right -->
@@ -510,6 +510,8 @@ class Bot extends Player {
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true;  e.preventDefault(); });
 window.addEventListener('keyup',   e => { keys[e.code] = false; });
+window.addEventListener('mousedown', e => { if (e.button === 0) keys['KeyF'] = true; });
+window.addEventListener('mouseup',   e => { if (e.button === 0) keys['KeyF'] = false; });
 
 // ── CAMERA UPDATE ─────────────────────────────────────────────────────────
 let camAngleY = 0;
