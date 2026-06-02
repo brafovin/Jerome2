@@ -409,37 +409,44 @@ class Player {
 }
 
 // ── BOT AI ────────────────────────────────────────────────────────────────
+let botProvoked = false; // bot only fights after player shoots first
+
 class Bot extends Player {
   constructor() {
     super(2, 0xB71C1C, 0x263238, 22, 0);
-    this.state       = 'chase';   // chase | strafe | build | retreat
-    this.stateTimer  = 0;
-    this.strafeDir   = 1;
-    this.buildTimer  = 0;
-    this.wanderAngle = 0;
+    this.state      = 'idle';  // idle | chase | strafe | build | retreat
+    this.stateTimer = 0;
+    this.strafeDir  = 1;
+    this.buildTimer = 0;
   }
 
   updateAI(target) {
     if (this.isDead || target.isDead) return;
 
-    const dx  = target.mesh.position.x - this.mesh.position.x;
-    const dz  = target.mesh.position.z - this.mesh.position.z;
+    const dx   = target.mesh.position.x - this.mesh.position.x;
+    const dz   = target.mesh.position.z - this.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     const angleToPlayer = Math.atan2(dx, dz);
 
-    // Face player
+    // Always face the player
     this.facing = angleToPlayer;
     this.mesh.rotation.y = angleToPlayer;
 
+    // While not provoked: stand still, do nothing
+    if (!botProvoked) {
+      this.tick();
+      return;
+    }
+
+    // ── Provoked behaviour ────────────────────────────────────────────────
     this.stateTimer--;
     if (this.stateTimer <= 0) {
-      // pick next state
       const r = Math.random();
-      if (dist > 30)       { this.state = 'chase';   this.stateTimer = 60; }
-      else if (r < 0.35)   { this.state = 'strafe';  this.stateTimer = 50; this.strafeDir = Math.random() < 0.5 ? 1 : -1; }
-      else if (r < 0.50 && this.health < 60) { this.state = 'retreat'; this.stateTimer = 40; }
-      else if (r < 0.60)   { this.state = 'build';   this.stateTimer = 30; }
-      else                 { this.state = 'chase';   this.stateTimer = 60; }
+      if (dist > 28)               { this.state = 'chase';   this.stateTimer = 80; }
+      else if (r < 0.35)           { this.state = 'strafe';  this.stateTimer = 60; this.strafeDir = Math.random() < 0.5 ? 1 : -1; }
+      else if (r < 0.50 && this.health < 55) { this.state = 'retreat'; this.stateTimer = 50; }
+      else if (r < 0.62)           { this.state = 'build';   this.stateTimer = 40; }
+      else                         { this.state = 'chase';   this.stateTimer = 80; }
     }
 
     let moveDx = 0, moveDz = 0;
@@ -448,43 +455,51 @@ class Bot extends Player {
       moveDx = dx / dist;
       moveDz = dz / dist;
     } else if (this.state === 'strafe') {
-      // perpendicular to player
       moveDx =  (dz / dist) * this.strafeDir;
       moveDz = -(dx / dist) * this.strafeDir;
     } else if (this.state === 'retreat') {
       moveDx = -(dx / dist);
       moveDz = -(dz / dist);
     } else if (this.state === 'build') {
-      // place a wall between self and player occasionally
       this.buildTimer--;
       if (this.buildTimer <= 0) {
-        const btype = Math.random() < 0.6 ? 2 : 1; // mostly walls
-        this.build(btype);
-        this.buildTimer = 15;
+        this.build(Math.random() < 0.65 ? 2 : 1);
+        this.buildTimer = 20;
       }
     }
 
-    // Keep comfortable distance
-    if (dist < 8 && this.state !== 'retreat') {
+    // Don't crowd the player
+    if (dist < 9 && this.state !== 'retreat') {
       moveDx -= dx / dist * 0.5;
       moveDz -= dz / dist * 0.5;
     }
 
     this.camAngleY = 0;
     const len = Math.sqrt(moveDx * moveDx + moveDz * moveDz);
-    if (len > 0) this.move(moveDx / len, moveDz / len, dist > 20);
+    // Bot speed is 0.07 (about half the player's 0.13), no sprinting
+    if (len > 0) {
+      const angle = Math.atan2(moveDx, moveDz);
+      this.mesh.rotation.y = this.facing; // keep facing player
+      const spd = 0.07;
+      this.mesh.position.x = Math.max(-145, Math.min(145, this.mesh.position.x + Math.sin(angle) * spd));
+      this.mesh.position.z = Math.max(-145, Math.min(145, this.mesh.position.z + Math.cos(angle) * spd));
+      this.walkT += 0.1;
+      const sw = Math.sin(this.walkT) * 0.4;
+      this.mesh.userData.legL.rotation.x =  sw;
+      this.mesh.userData.legR.rotation.x = -sw;
+    } else {
+      this.mesh.userData.legL.rotation.x *= 0.75;
+      this.mesh.userData.legR.rotation.x *= 0.75;
+    }
 
-    // Shoot when in range and has line of sight (simplified)
-    if (dist < 35 && this.shootCD <= 0) {
-      // small inaccuracy
-      const inaccuracy = 0.12 - Math.min(0.10, dist / 400);
+    // Shoot when in range — slower fire rate than player
+    if (dist < 38 && this.shootCD <= 0 && !this.isDead) {
+      const inaccuracy = 0.15;
       const aimAngle = angleToPlayer + (Math.random() - 0.5) * inaccuracy * 2;
-      if (this.shootCD <= 0 && !this.isDead) {
-        const sp = this.mesh.position.clone(); sp.y = 1.1;
-        bullets.push(new Bullet(sp, aimAngle, this.id));
-        this.shootCD = 28 + Math.floor(Math.random() * 20);
-        this.mesh.userData.armR.rotation.x = -0.5;
-      }
+      const sp = this.mesh.position.clone(); sp.y = 1.1;
+      bullets.push(new Bullet(sp, aimAngle, this.id));
+      this.shootCD = 45 + Math.floor(Math.random() * 25); // slower than player (22)
+      this.mesh.userData.armR.rotation.x = -0.5;
     }
 
     this.tick();
@@ -532,6 +547,7 @@ function restartGame() {
   players.forEach(p => scene.remove(p.mesh));
   players = [];
   camAngleY = 0;
+  botProvoked = false;
   document.getElementById('winner-screen').style.display = 'none';
   gameOver = false;
   initGame();
@@ -592,11 +608,13 @@ function loop() {
   }
   if (keys['KeyF']) {
     human.shoot();
+    botProvoked = true; // bot starts fighting after first shot
     keys['KeyF'] = false;
   }
   human.tick();
 
   // ── Bot AI ──
+  document.getElementById('bot-label').textContent = botProvoked ? '🤖 Kämpft!' : '🤖 Wartet...';
   bot.updateAI(human);
 
   // ── Bullets ──
