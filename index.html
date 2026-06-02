@@ -384,6 +384,9 @@ class Player {
       this.mesh.userData.armL.rotation.x = -sw * 0.6;
       this.mesh.userData.armR.rotation.x =  sw * 0.6;
     } else {
+      // Always face the direction the camera looks, even when standing still
+      this.facing = this.camAngleY;
+      this.mesh.rotation.y = this.camAngleY;
       this.mesh.userData.legL.rotation.x *= 0.75;
       this.mesh.userData.legR.rotation.x *= 0.75;
       this.mesh.userData.armL.rotation.x *= 0.75;
